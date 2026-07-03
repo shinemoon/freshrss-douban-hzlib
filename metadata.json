@@ -1,0 +1,8 @@
+{
+	"name": "Douban Hangzhou Library Scan",
+	"author": "GitHub Copilot",
+	"description": "Show Hangzhou Library availability for FreshRSS entries linking to Douban books.",
+	"version": "0.1.0",
+	"entrypoint": "LibScan",
+	"type": "user"
+}
