@@ -67,3 +67,9 @@
 	color: #475569;
 	background: rgba(226, 232, 240, 0.98);
 }
+
+@media (max-width: 768px) {
+	.libscan-indicator-title {
+		margin-right: 0px;
+	}
+}
