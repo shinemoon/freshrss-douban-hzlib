@@ -5,6 +5,7 @@ declare(strict_types=1);
 final class FreshExtension_libscan_Controller extends FreshRSS_ActionController
 {
 	private const SEARCH_URL = 'https://my1.zjhzlib.cn/opac/search';
+	private const DOUBAN_BOOK_URL_PATTERN = '/^https:\/\/(?:book\.douban\.com\/subject\/\d+|www\.douban\.com\/doubanapp\/dispatch\/book\/\d+)\/?(?:[?#].*)?$/i';
 
 	#[\Override]
 	public function firstAction(): void {
@@ -20,7 +21,8 @@ final class FreshExtension_libscan_Controller extends FreshRSS_ActionController
 		header('Referrer-Policy: same-origin');
 
 		$title = trim(Minz_Request::paramString('title', true));
-		if ($title === '') {
+		$sourceUrl = trim(Minz_Request::paramString('url', true));
+		if ($title === '' && $sourceUrl === '') {
 			$this->renderJson([
 				'status' => 'error',
 				'count' => null,
@@ -30,7 +32,18 @@ final class FreshExtension_libscan_Controller extends FreshRSS_ActionController
 			return;
 		}
 
-		$searchUrl = $this->buildSearchUrl($title);
+		$resolvedTitle = $this->resolveLookupTitle($title, $sourceUrl);
+		if ($resolvedTitle === null || $resolvedTitle === '') {
+			$this->renderJson([
+				'status' => 'error',
+				'count' => null,
+				'searchUrl' => null,
+				'error' => 'resolve_failed',
+			]);
+			return;
+		}
+
+		$searchUrl = $this->buildSearchUrl($resolvedTitle);
 		$html = $this->fetchSearchPage($searchUrl);
 		if ($html === null) {
 			$this->renderJson([
@@ -59,6 +72,58 @@ final class FreshExtension_libscan_Controller extends FreshRSS_ActionController
 			'searchUrl' => $searchUrl,
 			'error' => null,
 		]);
+	}
+
+	private function resolveLookupTitle(string $fallbackTitle, string $sourceUrl): ?string {
+		if ($sourceUrl !== '' && preg_match(self::DOUBAN_BOOK_URL_PATTERN, $sourceUrl) === 1) {
+			$fetchedTitle = $this->fetchDoubanBookTitle($sourceUrl);
+			if (is_string($fetchedTitle) && $fetchedTitle !== '') {
+				return $fetchedTitle;
+			}
+		}
+
+		return $fallbackTitle !== '' ? $fallbackTitle : null;
+	}
+
+	private function fetchDoubanBookTitle(string $url): ?string {
+		$normalizedUrl = $this->normalizeDoubanBookUrl($url);
+		if ($normalizedUrl === null) {
+			return null;
+		}
+
+		$html = $this->fetchSearchPage($normalizedUrl);
+		if ($html === null) {
+			return null;
+		}
+
+		if (preg_match('/<meta[^>]*property=["\']og:title["\'][^>]*content=["\']([^"\']+)["\']/iu', $html, $matches) === 1) {
+			return $this->normalizeDoubanPageTitle($matches[1]);
+		}
+
+		if (preg_match('/<title>(.*?)<\/title>/isu', $html, $matches) === 1) {
+			return $this->normalizeDoubanPageTitle($matches[1]);
+		}
+
+		return null;
+	}
+
+	private function normalizeDoubanBookUrl(string $url): ?string {
+		if (preg_match('/^https:\/\/book\.douban\.com\/subject\/(\d+)\/?(?:[?#].*)?$/i', $url, $matches) === 1) {
+			return 'https://book.douban.com/subject/' . $matches[1] . '/';
+		}
+
+		if (preg_match('/^https:\/\/www\.douban\.com\/doubanapp\/dispatch\/book\/(\d+)\/?(?:[?#].*)?$/i', $url, $matches) === 1) {
+			return 'https://book.douban.com/subject/' . $matches[1] . '/';
+		}
+
+		return null;
+	}
+
+	private function normalizeDoubanPageTitle(string $title): string {
+		$title = trim(html_entity_decode($title, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+		$title = preg_replace('/\s*[-–—·]?\s*豆瓣\s*$/u', '', $title) ?? $title;
+		$title = preg_replace('/\s*\(豆瓣\)\s*$/u', '', $title) ?? $title;
+		return trim($title);
 	}
 
 	private function buildSearchUrl(string $title): string {

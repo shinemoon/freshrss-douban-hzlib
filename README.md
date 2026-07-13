@@ -4,7 +4,7 @@
 
 ## 当前行为
 
-- 仅处理链接匹配 `https://book.douban.com/subject/xxxx` 的条目。
+- 处理链接匹配 `https://book.douban.com/subject/xxxx` 和 `https://www.douban.com/doubanapp/dispatch/book/xxxx` 的条目。
 - 书名优先读取标题链接的 `title` 属性，缺失时回退到可见文本。
 - 使用扩展后端代理访问杭州图书馆检索页，避免浏览器跨域限制。
 - 绿色表示检索到在馆结果。

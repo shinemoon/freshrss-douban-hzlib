@@ -63,7 +63,7 @@ function processEntries() {
 		const searchUrl = buildLibrarySearchUrl(title);
 		setIndicatorsState(badges, LIBSCAN_PENDING, '杭州图书馆检索中', searchUrl);
 		entry.dataset.libscanProcessed = '1';
-		lookupTitle(title)
+		lookupTitle(title, link.href)
 			.then((result) => {
 				applyLookupResult(badges, result);
 			})
@@ -74,7 +74,7 @@ function processEntries() {
 }
 
 function isDoubanBookUrl(url) {
-	return /^https:\/\/book\.douban\.com\/subject\/\d+\/?(?:[?#].*)?$/i.test(url);
+	return /^https:\/\/(?:book\.douban\.com\/subject\/\d+|www\.douban\.com\/doubanapp\/dispatch\/book\/\d+)\/?(?:[?#].*)?$/i.test(url);
 }
 
 function resolveBookTitle(link) {
@@ -170,16 +170,18 @@ function setIndicatorState(badge, state, title, href) {
 	badge.href = href || '#';
 }
 
-function lookupTitle(title) {
+function lookupTitle(title, sourceUrl) {
+	const requestKey = `${title}\u0000${sourceUrl || ''}`;
+
 	if (LIBSCAN_CACHE.has(title)) {
 		return Promise.resolve(LIBSCAN_CACHE.get(title));
 	}
 
-	if (LIBSCAN_REQUESTS.has(title)) {
-		return LIBSCAN_REQUESTS.get(title);
+	if (LIBSCAN_REQUESTS.has(requestKey)) {
+		return LIBSCAN_REQUESTS.get(requestKey);
 	}
 
-	const url = `${LIBSCAN_ENDPOINT}&title=${encodeURIComponent(title)}`;
+	const url = `${LIBSCAN_ENDPOINT}&title=${encodeURIComponent(title)}&url=${encodeURIComponent(sourceUrl || '')}`;
 	const request = fetch(url, {
 		credentials: 'same-origin',
 		headers: {
@@ -194,15 +196,15 @@ function lookupTitle(title) {
 		})
 		.then((payload) => {
 			LIBSCAN_CACHE.set(title, payload);
-			LIBSCAN_REQUESTS.delete(title);
+			LIBSCAN_REQUESTS.delete(requestKey);
 			return payload;
 		})
 		.catch((error) => {
-			LIBSCAN_REQUESTS.delete(title);
+			LIBSCAN_REQUESTS.delete(requestKey);
 			throw error;
 		});
 
-	LIBSCAN_REQUESTS.set(title, request);
+	LIBSCAN_REQUESTS.set(requestKey, request);
 	return request;
 }
 
